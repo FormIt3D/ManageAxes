@@ -1,0 +1,26 @@
+<html>
+<head>
+    <!-- for testing shared files locally, use: ../../FormItExamplePlugins/SharedPluginFiles -->
+    <link rel="stylesheet" type="text/css" href="https://formit3d.github.io/FormItExamplePlugins/SharedPluginFiles/FormItPluginStyling.css">
+    <title>Dynamo Eyedropper</title>
+    <META NAME="Title" CONTENT="Dynamo Eyedropper">
+    <META NAME="Author" CONTENT="Autodesk FormIt">
+        <script type="text/javascript" src="https://formit3d.github.io/FormItExamplePlugins/SharedPluginFiles/FormIt.js"></script>
+        <script type="text/javascript" src="https://formit3d.github.io/FormItExamplePlugins/SharedPluginFiles/FormItInterface.js"></script>
+        <script type="text/javascript" src="https://formit3d.github.io/FormItExamplePlugins/SharedPluginFiles/FormItPluginUI.js"></script>
+        <script type="text/javascript" src="ManageAxes.js"></script>
+        <script type="text/javascript">
+        FormItInterface.Initialize(async function () {
+
+            // initialize the UI
+            // this must be called from here, to ensure the HTML page is loaded
+            // before scripts try to access the window document
+            ManageAxes.initializeUI();
+
+        }); // DOMContentLoaded
+    </script>
+</head>
+<body>
+
+</body>
+</html>

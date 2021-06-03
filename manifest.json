@@ -1,0 +1,8 @@
+{
+    "PluginName": "Manage Axes",
+    "PluginDescription": "Modify and copy axes from local and world coordinate systems.",
+    "PluginType": "Panel",
+    "Scripts": [],
+    "Panel": "PLUGINLOCATION/index.html",
+    "PanelIcon": "PLUGINLOCATION/img/manage_axes@2x.png"
+}
