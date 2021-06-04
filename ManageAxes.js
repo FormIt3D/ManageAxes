@@ -25,10 +25,25 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('p'));
 
     // create the subsection for setting the LCS at the selected face 
-    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align LCS with Face', 'Align the local coordinate system Z-axis with the selected face.').element);
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align Z-Axis with Face', 'Align the local coordinate system Z-axis with the selected face.').element);
 
     // create the button to set the LCS on the selected face
-    contentContainer.appendChild(new FormIt.PluginUI.Button('Align LCS with Face', ManageAxes.setLCSOnSelectedFace).element);
+    contentContainer.appendChild(new FormIt.PluginUI.Button('Align Z-Axis with Face', ManageAxes.setLCSOnSelectedFace).element);
+
+    // separator and space
+    contentContainer.appendChild(document.createElement('p'));
+    contentContainer.appendChild(document.createElement('hr'));
+    contentContainer.appendChild(document.createElement('p'));
+
+    // create the subsection for standard tools
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Standard Tools', 'Easier access to tools from the FormIt context menu.').element);
+
+    // create the button for set axes
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Set Axes Manually', 'The standard FormIt tool to manually locate and adjust the local coordinate system axes. \nMove your cursor into canvas to set the LCS origin, then use the grips to adjust the axes.', ManageAxes.startSetAxesTool).element);
+
+    // create the button for reset axes
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Reset Axes to Default', 'The standard FormIt tool to reset the local coordinate system axes to the default values.', ManageAxes.resetAxes).element);
+    
 
     // create the footer
     document.body.appendChild(new FormIt.PluginUI.FooterModule().element);
@@ -130,4 +145,19 @@ ManageAxes.setLCSOnSelectedFace = async function()
         let failureMessage = "Select a single face to align the LCS to."
         await FormIt.UI.ShowNotification(failureMessage, FormIt.NotificationType.Information, 0);
     }
+}
+
+// wrapper function for starting the FormIt set axes tool
+ManageAxes.startSetAxesTool = async function()
+{
+    await FormIt.Tools.StartTool(15);
+}
+
+// reset the axes to the default position/alignment
+ManageAxes.resetAxes = async function()
+{
+    nHistoryID = await FormIt.GroupEdit.GetEditingHistoryID();
+    let defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
+
+    await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
 }
