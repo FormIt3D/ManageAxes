@@ -142,7 +142,7 @@ ManageAxes.setLCSOnSelectedFace = async function()
     }
     else 
     {
-        let failureMessage = "Select a single face to align the LCS to."
+        let failureMessage = "Select a single face to align the workplane to."
         await FormIt.UI.ShowNotification(failureMessage, FormIt.NotificationType.Information, 0);
     }
 }
