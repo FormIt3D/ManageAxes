@@ -17,7 +17,7 @@ ManageAxes.initializeUI = async function()
     window.document.body.appendChild(contentContainer);
 
     // create the header
-    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Manage Axes', 'Modify local and world coordinate systems between Group contexts.').element);
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Manage Axes', 'Tools to customize the local coordinate system.').element);
 
     // separator and space
     contentContainer.appendChild(document.createElement('p'));
@@ -25,7 +25,7 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('p'));
 
     // create the subsection for setting the LCS at the selected face 
-    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align LCS with Face', 'Select a face to align the local coordinate system with.').element);
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align LCS with Face', 'Align the local coordinate system Z-axis with the selected face.').element);
 
     // create the button to set the LCS on the selected face
     contentContainer.appendChild(new FormIt.PluginUI.Button('Align LCS with Face', ManageAxes.setLCSOnSelectedFace).element);
@@ -88,26 +88,42 @@ ManageAxes.setLCSOnSelectedFace = async function()
         let normals = await WSM.APIGetFaceVertexNormalsReadOnly(nHistoryID, nAlignmentFaceID);
         console.log("Normals: " + JSON.stringify(normals));
 
-        let singleNormal = normals[0];
+        let faceNormal = normals[0]["second"];
+        let zAxisVector = [faceNormal["x"], faceNormal["y"], faceNormal["z"]];
 
-        let singleNormalX = singleNormal["second"]["x"];
-        let singleNormalY = singleNormal["second"]["y"];
-        let singleNormalZ = singleNormal["second"]["z"];
+        // set an arbitrary x-axis to start
+        let xAxisVector = [1, 0, 0];
+        // check if xAxis is in the same direction as zAxis, and if so, change the arbitrary xAxis vector
+        if (1 - Math.abs(dotProductVector(zAxisVector, xAxisVector)) < 1.0e-10)
+        {
+            //console.log("Switching xAxis...");
+            xAxisVector = [0, 1, 0];
+        }
+    
+        // determine the y-axis using cross-product of X and Z
+        // this function is stored in utils
+        let yAxisVector = crossProductVector(zAxisVector, xAxisVector);
+        //console.log(JSON.stringify("Profile surface Y-axis vector: " + JSON.stringify(yAxisWSMVector3d)));
+    
+        // recalculate the actual x-axis vector, using cross-product of Y and Z
+        // this function is stored in utils
+        xAxisVector = crossProductVector(yAxisVector, zAxisVector);
+        //console.log(JSON.stringify("Profile surface X-axis vector: " + JSON.stringify(xAxisWSMVector3d)));
 
-        let singleNormal2 = singleNormal["second"];
+        // convert the raw vectors to WSM vector3Ds
+        let xAxisVector3d = await WSM.Geom.Vector3d(xAxisVector[0], xAxisVector[1], xAxisVector[2]);
+        let yAxisVector3d = await WSM.Geom.Vector3d(yAxisVector[0], yAxisVector[1], yAxisVector[2]);
+        let zAxisVector3d = await WSM.Geom.Vector3d(zAxisVector[0], zAxisVector[1], zAxisVector[2]);
 
         // create a new transf3d at the face centroid
-        let newLCS = await WSM.Geom.MakeRigidTransform(faceCentroidPoint3D, singleNormal2, singleNormal2, singleNormal2);
-        console.log(JSON.stringify(newLCS));
+        let newLCS = await WSM.Geom.MakeRigidTransform(faceCentroidPoint3D, xAxisVector3d, yAxisVector3d, zAxisVector3d);
+        console.log("New LCS: " + JSON.stringify(newLCS));
 
         let facePlane = await WSM.APIGetFacePlaneReadOnly(nHistoryID, nAlignmentFaceID);
         console.log("Face plane: " + JSON.stringify(facePlane));
 
         // set the new LCS
         await WSM.APISetLocalCoordinateSystem(nHistoryID, newLCS);
-
-        //let currentLCS = await  WSM.APIGetLocalCoordinateSystemReadOnly(nHistoryID);
-        //console.log("Current LCS: " + JSON.stringify(currentLCS));
     }
     else 
     {
