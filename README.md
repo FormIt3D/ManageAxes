@@ -1,2 +1,2 @@
-# ManageAxes
-Modify LCS and WCS axes in new ways.
+# Manage Axes
+Tools to customize the local coordinate system axes.
