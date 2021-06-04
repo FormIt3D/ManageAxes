@@ -25,10 +25,10 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('p'));
 
     // create the subsection for setting the LCS at the selected face 
-    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align Z-Axis with Face', 'Align the local coordinate system Z-axis with the selected face.').element);
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Align Workplane with Face', 'Align the local coordinate system workplane with the selected face.').element);
 
     // create the button to set the LCS on the selected face
-    contentContainer.appendChild(new FormIt.PluginUI.Button('Align Z-Axis with Face', ManageAxes.setLCSOnSelectedFace).element);
+    contentContainer.appendChild(new FormIt.PluginUI.Button('Align Workplane with Face', ManageAxes.setLCSOnSelectedFace).element);
 
     // separator and space
     contentContainer.appendChild(document.createElement('p'));
