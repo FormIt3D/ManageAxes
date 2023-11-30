@@ -5,8 +5,6 @@ if (typeof ManageAxes == 'undefined')
 
 /*** web/UI code - runs natively in the plugin process ***/
 
-// IDs of input elements that need to be referenced or updated
-
 ManageAxes.initializeUI = async function()
 {
     // create an overall container for all objects that comprise the "content" of the plugin
@@ -29,6 +27,17 @@ ManageAxes.initializeUI = async function()
 
     // create the button to set the LCS on the selected face
     contentContainer.appendChild(new FormIt.PluginUI.Button('Align Workplane with Face', ManageAxes.setLCSOnSelectedFace).element);
+
+    // separator and space
+    contentContainer.appendChild(document.createElement('p'));
+    contentContainer.appendChild(document.createElement('hr'));
+    contentContainer.appendChild(document.createElement('p'));
+
+    // create the subsection for re-origining: moving geometry back to the world origin, then transforming the instance to where the geometry was
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin Current Context', 'Set the origin of the current editing history to the bottom centroid of all geometry.').element);
+
+    // create the button for reset axes
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing context (Group) to the origin, then applies the reverse transform to the instance. Helps fix numeric noise issues caused by working too far from the world origin. Note that this only works when editing a Group.", () => {}).element);
 
     // separator and space
     contentContainer.appendChild(document.createElement('p'));
