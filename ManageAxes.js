@@ -185,22 +185,31 @@ ManageAxes.reOrigin = async () => {
         return;
     }
 
+    // start a new undo state
+    await FormIt.UndoManagement.BeginState();
+
     // get the bounding box of the editing history and its upper and lower bounds
     const editingBBox = await WSM.APIGetBoxReadOnly(containingHistoryId, editingPath.ids[0].Object);
 
     // make a translation transform to the world origin
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
     const transf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
-    // make the inverse transform too
-    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
 
     // get all the non-owned objects in this history
     const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
     // and move them to the origin
-    await WSM.APITransformObjects(containingHistoryId, objectIds, transf3d);
+    await WSM.APITransformObjects(editingHistoryId, objectIds, transf3d);
 
+    // reset the local axes (these get moved along with the non-owned objects)
+    const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
+    await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
+
+    // get the inverse transform
+    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
     // get all the groups that reference this editing history
     const referencingGroupIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
     // and move all of them using the inverted transform
     await WSM.APITransformObjects(containingHistoryId, referencingGroupIds, inverseTransf3d);
+    
+    await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
 }
