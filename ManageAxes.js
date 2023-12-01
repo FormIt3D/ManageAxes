@@ -171,7 +171,7 @@ ManageAxes.resetAxes = async function()
     await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
 }
 
-// moves all geometry in the current editing history to the world origin, then applies the reverse transform to the instance
+// moves all geometry in the current editing history to the world origin, then applies the reverse transform to the group
 ManageAxes.reOrigin = async () => {
     // get the current editing group instance path
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
@@ -194,18 +194,18 @@ ManageAxes.reOrigin = async () => {
     // make a translation transform to the world origin
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
     const transf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
+    // get the inverse transform for use later
+    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
 
     // get all the non-owned objects in this history
     const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
-    // and move them to the origin
+    // and move them to the world origin
     await WSM.APITransformObjects(editingHistoryId, objectIds, transf3d);
 
-    // reset the local axes (these get moved along with the non-owned objects)
+    // reset the local origin (this gets moved along with the non-owned objects)
     const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
 
-    // get the inverse transform
-    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
     // get all the groups that reference this editing history
     const referencingGroupIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
     // and move all of them using the inverted transform
