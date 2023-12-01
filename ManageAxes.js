@@ -37,7 +37,7 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin Current Context', 'Set the origin of the current editing history to the bottom centroid of all geometry.').element);
 
     // create the button for reset axes
-    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing context (Group) to the origin, then applies the reverse transform to the instance. Helps fix numeric noise issues caused by working too far from the world origin. Note that this only works when editing a Group.", () => {}).element);
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing history (group) to the world origin, then applies the reverse transform to all instances of this history (group). <br><br>Helps fix numeric noise issues caused by working too far from the world origin. <br><br>Note that this only works when editing a group.", ManageAxes.reOrigin).element);
 
     // separator and space
     contentContainer.appendChild(document.createElement('p'));
@@ -169,4 +169,38 @@ ManageAxes.resetAxes = async function()
     let defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
 
     await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
+}
+
+// moves all geometry in the current editing history to the world origin, then applies the reverse transform to the instance
+ManageAxes.reOrigin = async () => {
+    // get the current editing group instance path
+    const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
+    const finalEditingObjectHistoryId = await WSM.GroupInstancePath.GetTopObjectHistoryID(editingPath);
+    const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
+    const containingHistoryId = finalEditingObjectHistoryId.History;
+
+    // this action won't be valid for the main history
+    if (editingHistoryId === 0) {
+        await FormIt.UI.ShowNotification("This action requires a group to be edited. \nEdit a group and try again.", FormIt.NotificationType.Error, 0)
+        return;
+    }
+
+    // get the bounding box of the editing history and its upper and lower bounds
+    const editingBBox = await WSM.APIGetBoxReadOnly(containingHistoryId, editingPath.ids[0].Object);
+
+    // make a translation transform to the world origin
+    const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
+    const transf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
+    // make the inverse transform too
+    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
+
+    // get all the non-owned objects in this history
+    const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
+    // and move them to the origin
+    await WSM.APITransformObjects(containingHistoryId, objectIds, transf3d);
+
+    // get all the groups that reference this editing history
+    const referencingGroupIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
+    // and move all of them using the inverted transform
+    await WSM.APITransformObjects(containingHistoryId, referencingGroupIds, inverseTransf3d);
 }
