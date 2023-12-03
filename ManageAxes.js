@@ -33,7 +33,7 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('hr'));
     contentContainer.appendChild(document.createElement('p'));
 
-    // create the subsection for re-origining: moving geometry back to the world origin, then transforming the instance to where the geometry was
+    // create the subsection for re-origining: moving all geometry in this history to the world origin, then transforming the instance in the reverse
     contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin', 'Set the origin of the current editing history (group) to the bottom centroid of all geometry.').element);
 
     // create the button for reset axes
@@ -171,9 +171,9 @@ ManageAxes.resetAxes = async function()
     await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
 }
 
-// moves all geometry in the current editing history to the world origin, then applies the reverse transform to the group
+// moves all geometry in the current editing history to the world origin, then applies the reverse transform to all instances
 ManageAxes.reOrigin = async () => {
-    // get the current editing group instance path
+    // get the current editing group instance path and history ID
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
     const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
 
@@ -186,13 +186,13 @@ ManageAxes.reOrigin = async () => {
     // get the bounding box of the editing history and its upper and lower bounds
     const editingBBox = await WSM.APIGetBoxReadOnly(editingHistoryId);
 
-    // make a translation transform from the geometry to the world origin
+    // make a translation transform from the geometry to the world origin using the bounding box
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
     const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
     // get the inverse transform for use later
     const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
 
-    // check if the transform from the geom to the world origin is null
+    // check if the transform from the geom to the world origin is null - if so, stop here
     const isGeomTransf3dNull = await WSM.Vector3d.IsNull(vec3d)
     if (isGeomTransf3dNull) {
         // show a message that nothing was changed
@@ -223,7 +223,7 @@ ManageAxes.reOrigin = async () => {
         const instanceTransf3d = instancesOfHistory.transforms[i];
         const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
 
-        // multiply instance transform, instance inverse transform, and geom inverse transform
+        // multiply the geom inverse transform, the inverse instance transform, and the instance transform
         const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
         const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
 
@@ -231,11 +231,12 @@ ManageAxes.reOrigin = async () => {
         await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
     }
 
-    // reset the local origin (this gets moved along with the non-owned objects)
+    // reset the local origin (this gets moved along with the non-owned objects) 
+    // so the local origin appears at the bottom center of the geometry
     const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
 
-    // hack: end group edit mode and start again to force show the updated lcs graphics
+    // hack: end group edit mode and start again to force show the updated origin position
     await FormIt.GroupEdit.EndEditInContext();
     await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
 
