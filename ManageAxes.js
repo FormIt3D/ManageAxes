@@ -34,10 +34,10 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('p'));
 
     // create the subsection for the "re-origin" command which
-    // moves all geometry in this history to the world origin, then transforms all instances in the reverse
+    // moves all geometry in this history to the world origin, then inversely transforms all instances of this history
     contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin', 'Set the origin of the current editing history (group) to the bottom centroid of all geometry.').element);
 
-    // create the button for reset axes
+    // create the button for the "re-origin" command
     contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing history (group) to the world origin, then applies the reverse transform to all instances of this history (group). <br><br>Helps fix numeric noise issues caused by working too far from the world origin. <br><br>Note that this only works when editing a group, and this action will affect all instances of this history (group).", ManageAxes.reOrigin).element);
 
     // separator and space
@@ -172,7 +172,7 @@ ManageAxes.resetAxes = async function()
     await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
 }
 
-// moves all geometry in the current editing history to the world origin, then applies the reverse transform to all instances
+// moves all geometry in the current editing history to the world origin, then applies the inverse transform to all instances
 ManageAxes.reOrigin = async () => {
     // get the current editing group instance path and history ID
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
