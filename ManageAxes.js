@@ -33,7 +33,7 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('hr'));
     contentContainer.appendChild(document.createElement('p'));
 
-    // create the subsection for re-origining: 
+    // create the subsection for the "re-origin" command which
     // moves all geometry in this history to the world origin, then transforms all instances in the reverse
     contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin', 'Set the origin of the current editing history (group) to the bottom centroid of all geometry.').element);
 
