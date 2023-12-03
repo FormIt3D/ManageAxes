@@ -177,7 +177,6 @@ ManageAxes.reOrigin = async () => {
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
     const finalEditingObjectHistoryId = await WSM.GroupInstancePath.GetTopObjectHistoryID(editingPath);
     const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
-    const parentHistoryId = finalEditingObjectHistoryId.History;
 
     // this action won't be valid for the main history
     if (editingHistoryId === 0) {
@@ -225,6 +224,10 @@ ManageAxes.reOrigin = async () => {
     // reset the local origin (this gets moved along with the non-owned objects)
     const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
+
+    // hack: end group edit mode and start again to show the updated lcs graphics
+    await FormIt.GroupEdit.EndEditInContext();
+    await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
 
     await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
 
