@@ -34,10 +34,10 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('p'));
 
     // create the subsection for re-origining: moving geometry back to the world origin, then transforming the instance to where the geometry was
-    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin Current Context', 'Set the origin of the current editing history to the bottom centroid of all geometry.').element);
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin', 'Set the origin of the current editing history (group) to the bottom centroid of all geometry.').element);
 
     // create the button for reset axes
-    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing history (group) to the world origin, then applies the reverse transform to all instances of this history (group). <br><br>Helps fix numeric noise issues caused by working too far from the world origin. <br><br>Note that this only works when editing a group.", ManageAxes.reOrigin).element);
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing history (group) to the world origin, then applies the reverse transform to all instances of this history (group). <br><br>Helps fix numeric noise issues caused by working too far from the world origin. <br><br>Note that this only works when editing a group, and this action will affect all instances of this history (group).", ManageAxes.reOrigin).element);
 
     // separator and space
     contentContainer.appendChild(document.createElement('p'));
@@ -175,7 +175,6 @@ ManageAxes.resetAxes = async function()
 ManageAxes.reOrigin = async () => {
     // get the current editing group instance path
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
-    const finalEditingObjectHistoryId = await WSM.GroupInstancePath.GetTopObjectHistoryID(editingPath);
     const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
 
     // this action won't be valid for the main history
@@ -190,7 +189,7 @@ ManageAxes.reOrigin = async () => {
     // get the bounding box of the editing history and its upper and lower bounds
     const editingBBox = await WSM.APIGetBoxReadOnly(editingHistoryId);
 
-    // make a translation transform to the world origin
+    // make a translation transform from the geometry to the world origin
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
     const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
     // get the inverse transform for use later
@@ -203,20 +202,21 @@ ManageAxes.reOrigin = async () => {
 
     // get all the instances of this history
     const instancesOfHistory = await WSM.APIGetAllAggregateTransf3dsReadOnly(editingHistoryId, 0);
-    console.log(instancesOfHistory);
 
     // for each instance...
     for (let i = 0; i < instancesOfHistory.paths.length; i++) {
         // how many levels "deep" is this instance from history 0
         const historyDepthIndex = instancesOfHistory.paths[i].ids.length - 1;
         const instanceObjectHistoryId = instancesOfHistory.paths[i].ids[historyDepthIndex];
-        console.log(instanceObjectHistoryId);
+
         // get the instance's transform and the inverse
         const instanceTransf3d = instancesOfHistory.transforms[i];
         const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
+
         // multiply instance transform, instance inverse transform, and geom inverse transform
         const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
         const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
+
         // transform the instance by the final transf3d
         await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
     }
@@ -225,11 +225,14 @@ ManageAxes.reOrigin = async () => {
     const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
 
-    // hack: end group edit mode and start again to show the updated lcs graphics
+    // hack: end group edit mode and start again to force show the updated lcs graphics
     await FormIt.GroupEdit.EndEditInContext();
     await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
 
     await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
+
+    // show a success message
+    await FormIt.UI.ShowNotification("Successfully re-origined this history.\nAffected " + instancesOfHistory.paths.length + " total instances.", FormIt.NotificationType.Success, 0)
 
     return;
 }
