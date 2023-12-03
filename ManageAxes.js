@@ -177,7 +177,7 @@ ManageAxes.reOrigin = async () => {
     const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
     const finalEditingObjectHistoryId = await WSM.GroupInstancePath.GetTopObjectHistoryID(editingPath);
     const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
-    const containingHistoryId = finalEditingObjectHistoryId.History;
+    const parentHistoryId = finalEditingObjectHistoryId.History;
 
     // this action won't be valid for the main history
     if (editingHistoryId === 0) {
@@ -189,27 +189,44 @@ ManageAxes.reOrigin = async () => {
     await FormIt.UndoManagement.BeginState();
 
     // get the bounding box of the editing history and its upper and lower bounds
-    const editingBBox = await WSM.APIGetBoxReadOnly(containingHistoryId, editingPath.ids[0].Object);
+    const editingBBox = await WSM.APIGetBoxReadOnly(parentHistoryId, editingPath.ids[0].Object);
 
     // make a translation transform to the world origin
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
-    const transf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
+    const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
     // get the inverse transform for use later
-    const inverseTransf3d = await WSM.Transf3d.Invert(transf3d);
+    const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
 
     // get all the non-owned objects in this history
     const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
     // and move them to the world origin
-    await WSM.APITransformObjects(editingHistoryId, objectIds, transf3d);
+    await WSM.APITransformObjects(editingHistoryId, objectIds, geomTransf3d);
+
+    // get all the instances of this history
+    const instancesOfHistory = await WSM.APIGetAllAggregateTransf3dsReadOnly(editingHistoryId, 0);
+    console.log(instancesOfHistory);
+
+    // for each instance...
+    for (let i = 0; i < instancesOfHistory.paths.length; i++) {
+        // how many levels "deep" is this instance from history 0
+        const historyDepthIndex = instancesOfHistory.paths[i].ids.length - 1;
+        const instanceObjectHistoryId = instancesOfHistory.paths[i].ids[historyDepthIndex];
+        console.log(instanceObjectHistoryId);
+        // get the instance's transform and the inverse
+        const instanceTransf3d = instancesOfHistory.transforms[i];
+        const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
+        // multiply instance transform, instance inverse transform, and geom inverse transform
+        const newTransf3dPartial = await WSM.Transf3d.Multiply(instanceTransf3d, inverseGeomTransf3d);
+        const newTransf3dFinal = await WSM.Transf3d.Multiply(newTransf3dPartial, inverseInstanceTransf3d);
+        // transform the instance by the final transf3d
+        await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
+    }
 
     // reset the local origin (this gets moved along with the non-owned objects)
     const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
 
-    // get all the groups that reference this editing history
-    const referencingGroupIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
-    // and move all of them using the inverted transform
-    await WSM.APITransformObjects(containingHistoryId, referencingGroupIds, inverseTransf3d);
-    
     await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
+
+    return;
 }
