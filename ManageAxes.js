@@ -183,9 +183,6 @@ ManageAxes.reOrigin = async () => {
         return;
     }
 
-    // start a new undo state
-    await FormIt.UndoManagement.BeginState();
-
     // get the bounding box of the editing history and its upper and lower bounds
     const editingBBox = await WSM.APIGetBoxReadOnly(editingHistoryId);
 
@@ -195,6 +192,19 @@ ManageAxes.reOrigin = async () => {
     // get the inverse transform for use later
     const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
 
+    // check if the transform from the geom to the world origin is null
+    const isGeomTransf3dNull = await WSM.Vector3d.IsNull(vec3d)
+    if (isGeomTransf3dNull) {
+        // show a message that nothing was changed
+        await FormIt.UI.ShowNotification("The origin is already centered below this geometry.\nNo changes were made.", FormIt.NotificationType.Information, 0);
+
+        // no need to go any further
+        return;
+    }
+
+    // if we got this far, changes will be made to the model, so start a new undo state
+    await FormIt.UndoManagement.BeginState();
+
     // get all the non-owned objects in this history
     const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
     // and move them to the world origin
@@ -203,7 +213,7 @@ ManageAxes.reOrigin = async () => {
     // get all the instances of this history
     const instancesOfHistory = await WSM.APIGetAllAggregateTransf3dsReadOnly(editingHistoryId, 0);
 
-    // for each instance...
+    // for each instance of this history...
     for (let i = 0; i < instancesOfHistory.paths.length; i++) {
         // how many levels "deep" is this instance from history 0
         const historyDepthIndex = instancesOfHistory.paths[i].ids.length - 1;
