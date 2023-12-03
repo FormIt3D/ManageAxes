@@ -189,7 +189,7 @@ ManageAxes.reOrigin = async () => {
     await FormIt.UndoManagement.BeginState();
 
     // get the bounding box of the editing history and its upper and lower bounds
-    const editingBBox = await WSM.APIGetBoxReadOnly(parentHistoryId, editingPath.ids[0].Object);
+    const editingBBox = await WSM.APIGetBoxReadOnly(editingHistoryId);
 
     // make a translation transform to the world origin
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
@@ -216,8 +216,8 @@ ManageAxes.reOrigin = async () => {
         const instanceTransf3d = instancesOfHistory.transforms[i];
         const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
         // multiply instance transform, instance inverse transform, and geom inverse transform
-        const newTransf3dPartial = await WSM.Transf3d.Multiply(instanceTransf3d, inverseGeomTransf3d);
-        const newTransf3dFinal = await WSM.Transf3d.Multiply(newTransf3dPartial, inverseInstanceTransf3d);
+        const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
+        const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
         // transform the instance by the final transf3d
         await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
     }
