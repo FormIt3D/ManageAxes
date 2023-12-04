@@ -5,7 +5,8 @@ if (typeof ManageAxes == 'undefined')
 
 /*** web/UI code - runs natively in the plugin process ***/
 
-// IDs of input elements that need to be referenced or updated
+const reOriginOverrideCheckboxInputId = 'reOriginOverrideCheckbox';
+let reoriginOverrideCheckboxInput;
 
 ManageAxes.initializeUI = async function()
 {
@@ -35,6 +36,21 @@ ManageAxes.initializeUI = async function()
     contentContainer.appendChild(document.createElement('hr'));
     contentContainer.appendChild(document.createElement('p'));
 
+    // create the subsection for the "re-origin" command which
+    // moves all geometry in this history to the world origin, then inversely transforms all instances of this history
+    contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Re-Origin', 'Set the origin of the current editing history (group) to the bottom centroid of all geometry.').element);
+
+    // create the button for the "re-origin" command
+    contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Re-Origin Current Context', "Moves all geometry in the current editing history (group) to the world origin, then applies the inverse transform to all instances of this history (group). <br><br>Helps fix numeric noise issues caused by working far from the world origin. <br><br>Note that this only works when editing a group, and this action will affect all instances of this history (group). <br><br>If Override Custom Origin is checked, the origin will be moved to the bottom center of the geometry, even if a custom origin had been defined in this history.", ManageAxes.reOrigin).element);''
+    contentContainer.appendChild(new FormIt.PluginUI.CheckboxModule('Override Custom Origin', 'reOriginOverrideCheckboxContainer', 'multiModuleContainer', reOriginOverrideCheckboxInputId).element);
+    reoriginOverrideCheckboxInput = document.getElementById(reOriginOverrideCheckboxInputId);
+    reoriginOverrideCheckboxInput.checked = true;
+
+    // separator and space
+    contentContainer.appendChild(document.createElement('p'));
+    contentContainer.appendChild(document.createElement('hr'));
+    contentContainer.appendChild(document.createElement('p'));
+
     // create the subsection for standard tools
     contentContainer.appendChild(new FormIt.PluginUI.HeaderModule('Standard Tools', 'Easier access to tools from the FormIt context menu.').element);
 
@@ -44,7 +60,6 @@ ManageAxes.initializeUI = async function()
     // create the button for reset axes
     contentContainer.appendChild(new FormIt.PluginUI.ButtonWithInfoToggleModule('Reset Axes to Default', 'The standard FormIt tool to reset the local coordinate system axes to the default values.', ManageAxes.resetAxes).element);
     
-
     // create the footer
     document.body.appendChild(new FormIt.PluginUI.FooterModule().element);
 }
@@ -157,7 +172,93 @@ ManageAxes.startSetAxesTool = async function()
 ManageAxes.resetAxes = async function()
 {
     nHistoryID = await FormIt.GroupEdit.GetEditingHistoryID();
-    let defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
+    let defaultLCS = await WSM.Transf3d.Transf3d();
 
     await WSM.APISetLocalCoordinateSystem(nHistoryID, defaultLCS);
+}
+
+// moves all geometry in the current editing history to the world origin, then applies the inverse transform to all instances
+ManageAxes.reOrigin = async () => {
+    // get the current editing group instance path and history ID
+    const editingPath = await FormIt.GroupEdit.GetInContextEditingPath();
+    const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
+
+    // this action won't be valid for the main history
+    if (editingHistoryId === await FormIt.Model.GetHistoryID ()) {
+        await FormIt.UI.ShowNotification("This action requires a group to be edited. \nEdit a group and try again.", FormIt.NotificationType.Error, 0)
+        return;
+    }
+
+    // get the bounding box of the editing history and its upper and lower bounds
+    const editingBBox = await WSM.APIGetBoxReadOnly(editingHistoryId);
+
+    // make a translation transform from the geometry to the world origin using the bounding box
+    const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
+
+    // check if the transform from the geom to the world origin is null - if so, stop here
+    const isGeomTransf3dNull = await WSM.Vector3d.IsNull(vec3d)
+    if (isGeomTransf3dNull) {
+        // show a message that nothing was changed
+        await FormIt.UI.ShowNotification("The origin is already centered below this geometry.\nNo changes were made.", FormIt.NotificationType.Information, 0);
+
+        // no need to go any further
+        return;
+    }
+
+    // make a transform out of the vec3d
+    const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
+    // get the inverse transform for use later
+    const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
+
+    // if we got this far, changes will be made to the model, so start a new undo state
+    await FormIt.UndoManagement.BeginState();
+
+    // get all the non-owned objects in this history
+    const objectIds = await WSM.APIGetAllNonOwnedReadOnly(editingHistoryId);
+    // and move them to the world origin
+    await WSM.APITransformObjects(editingHistoryId, objectIds, geomTransf3d);
+
+    // get all groups referencing this history
+    const referencingGroupObjHistIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
+
+    // get and transform all the instances from this group
+    let instancesToTransform = [];
+    for (let i = 0; i < referencingGroupObjHistIds.length; ++i) {
+        // get all the instances from the group
+        const instancesFromGroup = await WSM.APIGetObjectsByTypeReadOnly(referencingGroupObjHistIds[i].History, referencingGroupObjHistIds[i].Object, WSM.nObjectType.nInstanceType, false);
+        
+        for (let k = 0; k < instancesFromGroup.length; ++k) {
+            // get the instance's transform and the inverse
+            const instanceTransf3d = await WSM.APIGetInstanceTransf3dReadOnly(referencingGroupObjHistIds[i].History, instancesFromGroup[k]);
+            const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
+
+            // multiply the geom inverse transform, the inverse instance transform, and the instance transform
+            const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
+            const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
+
+            // transform the instance by the final transf3d
+            await WSM.APITransformObject(referencingGroupObjHistIds[i].History, instancesFromGroup[k], newTransf3dFinal);
+
+            // add this instance to the array so we can communicate how many instances were affected at the end
+            instancesToTransform.push(instancesFromGroup[k]);
+        }
+    }
+
+    await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
+
+    // if the override checkbox is checked, reset the axes
+    if (reoriginOverrideCheckboxInput.checked) {
+        // local origin was moved with the geom transform operation
+        // reset the axes so the local origin appears at the bottom center of the geometry
+        ManageAxes.resetAxes();
+    }
+
+    // hack: end group edit mode and start again to force show the updated origin position
+    await FormIt.GroupEdit.EndEditInContext();
+    await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
+
+    // show a success message
+    await FormIt.UI.ShowNotification("Successfully re-origined this history.\nAffected " + instancesToTransform.length + " total instances.", FormIt.NotificationType.Success, 0)
+
+    return;
 }
