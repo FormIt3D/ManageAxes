@@ -179,7 +179,7 @@ ManageAxes.reOrigin = async () => {
     const editingHistoryId = await FormIt.GroupEdit.GetEditingHistoryID();
 
     // this action won't be valid for the main history
-    if (editingHistoryId === 0) {
+    if (editingHistoryId === await FormIt.Model.GetHistoryID ()) {
         await FormIt.UI.ShowNotification("This action requires a group to be edited. \nEdit a group and try again.", FormIt.NotificationType.Error, 0)
         return;
     }
@@ -234,7 +234,7 @@ ManageAxes.reOrigin = async () => {
 
     // reset the local origin (this gets moved along with the non-owned objects) 
     // so the local origin appears at the bottom center of the geometry
-    const defaultLCS = await WSM.Geom.MakeRigidTransform(await WSM.Geom.Point3d(0, 0, 0), await WSM.Geom.Vector3d(1, 0, 0), await WSM.Geom.Vector3d(0, 1, 0), await WSM.Geom.Vector3d(0, 0, 1));
+    const defaultLCS = await WSM.Transf3d.Transf3d();
     await WSM.APISetLocalCoordinateSystem(editingHistoryId, defaultLCS);
 
     // hack: end group edit mode and start again to force show the updated origin position
