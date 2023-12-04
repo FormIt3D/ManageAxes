@@ -213,25 +213,30 @@ ManageAxes.reOrigin = async () => {
     // and move them to the world origin
     await WSM.APITransformObjects(editingHistoryId, objectIds, geomTransf3d);
 
-    // get all the instances of this history
-    const instancesOfHistory = await WSM.APIGetAllAggregateTransf3dsReadOnly(editingHistoryId, 0);
+    // get all groups referencing this history
+    const referencingGroupObjHistIds = await WSM.APIGetHistoryReferencingGroupsReadOnly(editingHistoryId);
 
-    // for each instance of this history...
-    for (let i = 0; i < instancesOfHistory.paths.length; i++) {
-        // how many levels "deep" is this instance from history 0
-        const historyDepthIndex = instancesOfHistory.paths[i].ids.length - 1;
-        const instanceObjectHistoryId = instancesOfHistory.paths[i].ids[historyDepthIndex];
+    // get and transform all the instances from this group
+    let instancesToTransform = [];
+    for (let i = 0; i < referencingGroupObjHistIds.length; ++i) {
+        // get all the instances from the group
+        const instancesFromGroup = await WSM.APIGetObjectsByTypeReadOnly(referencingGroupObjHistIds[i].History, referencingGroupObjHistIds[i].Object, WSM.nObjectType.nInstanceType, false);
+        
+        for (let k = 0; k < instancesFromGroup.length; ++k) {
+            // get the instance's transform and the inverse
+            const instanceTransf3d = await WSM.APIGetInstanceTransf3dReadOnly(referencingGroupObjHistIds[i].History, instancesFromGroup[k]);
+            const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
 
-        // get the instance's transform and the inverse
-        const instanceTransf3d = instancesOfHistory.transforms[i];
-        const inverseInstanceTransf3d = await WSM.Transf3d.Invert(instanceTransf3d);
+            // multiply the geom inverse transform, the inverse instance transform, and the instance transform
+            const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
+            const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
 
-        // multiply the geom inverse transform, the inverse instance transform, and the instance transform
-        const newTransf3dPartial = await WSM.Transf3d.Multiply(inverseGeomTransf3d, inverseInstanceTransf3d);
-        const newTransf3dFinal = await WSM.Transf3d.Multiply(instanceTransf3d, newTransf3dPartial);
+            // transform the instance by the final transf3d
+            await WSM.APITransformObject(referencingGroupObjHistIds[i].History, instancesFromGroup[k], newTransf3dFinal);
 
-        // transform the instance by the final transf3d
-        await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
+            // add this instance to the array so we can communicate how many instances were affected at the end
+            instancesToTransform.push(instancesFromGroup[k]);
+        }
     }
 
     await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
@@ -246,7 +251,7 @@ ManageAxes.reOrigin = async () => {
     await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
 
     // show a success message
-    await FormIt.UI.ShowNotification("Successfully re-origined this history.\nAffected " + instancesOfHistory.paths.length + " total instances.", FormIt.NotificationType.Success, 0)
+    await FormIt.UI.ShowNotification("Successfully re-origined this history.\nAffected " + instancesToTransform.length + " total instances.", FormIt.NotificationType.Success, 0)
 
     return;
 }
