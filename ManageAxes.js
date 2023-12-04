@@ -189,9 +189,6 @@ ManageAxes.reOrigin = async () => {
 
     // make a translation transform from the geometry to the world origin using the bounding box
     const vec3d = await WSM.Geom.Vector3d(-(editingBBox.lower.x + editingBBox.upper.x) / 2, -(editingBBox.lower.y + editingBBox.upper.y) / 2, -editingBBox.lower.z);
-    const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
-    // get the inverse transform for use later
-    const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
 
     // check if the transform from the geom to the world origin is null - if so, stop here
     const isGeomTransf3dNull = await WSM.Vector3d.IsNull(vec3d)
@@ -202,6 +199,11 @@ ManageAxes.reOrigin = async () => {
         // no need to go any further
         return;
     }
+
+    // make a transform out of the vec3d
+    const geomTransf3d = await WSM.Transf3d.MakeTranslationTransform(vec3d);
+    // get the inverse transform for use later
+    const inverseGeomTransf3d = await WSM.Transf3d.Invert(geomTransf3d);
 
     // if we got this far, changes will be made to the model, so start a new undo state
     await FormIt.UndoManagement.BeginState();
@@ -232,6 +234,8 @@ ManageAxes.reOrigin = async () => {
         await WSM.APITransformObject(instanceObjectHistoryId.History, instanceObjectHistoryId.Object, newTransf3dFinal);
     }
 
+    await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
+
     // reset the local origin (this gets moved along with the non-owned objects) 
     // so the local origin appears at the bottom center of the geometry
     const defaultLCS = await WSM.Transf3d.Transf3d();
@@ -240,8 +244,6 @@ ManageAxes.reOrigin = async () => {
     // hack: end group edit mode and start again to force show the updated origin position
     await FormIt.GroupEdit.EndEditInContext();
     await FormIt.GroupEdit.SetInContextEditingPath(editingPath);
-
-    await FormIt.UndoManagement.EndState("Manage Axes - Re-Origin");
 
     // show a success message
     await FormIt.UI.ShowNotification("Successfully re-origined this history.\nAffected " + instancesOfHistory.paths.length + " total instances.", FormIt.NotificationType.Success, 0)
